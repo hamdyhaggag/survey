@@ -49,13 +49,15 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // Web config (existing project — update if you migrate web too)
+  // Web config
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDcH_FD8odXd3ldvBPMzG66RVUg-7mkbiI',
-    appId: '1:803752529944:android:d6725a5f6669d300e1736d',
+    apiKey: 'AIzaSyBQYJw76j1BPrhX6pN1elf_43uQ8CAtpE0',
+    appId: '1:803752529944:web:6e3fc02b7d7211bbe1736d',
     messagingSenderId: '803752529944',
     projectId: 'survey-b674f',
+    authDomain: 'survey-b674f.firebaseapp.com',
     storageBucket: 'survey-b674f.firebasestorage.app',
+    measurementId: 'G-9WZ41HWPM3',
   );
 
   // Android config from google-services.json
