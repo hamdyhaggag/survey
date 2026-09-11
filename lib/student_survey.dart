@@ -44,6 +44,17 @@ class _StudentSurveyState extends State<StudentSurvey> {
   // Multi-instructor Selection & Ratings State
   final Set<String> _selectedInstructorIds = {};
   final Map<String, Map<String, int>> _instructorRatings = {};
+  String? _focusedInstructorId;
+
+  bool _isInstructorComplete(String id) {
+    final r = _instructorRatings[id];
+    if (r == null) return false;
+    return (r['clarity'] ?? 0) > 0 &&
+        (r['simplification'] ?? 0) > 0 &&
+        (r['interaction'] ?? 0) > 0 &&
+        (r['answering'] ?? 0) > 0 &&
+        (r['examples'] ?? 0) > 0;
+  }
 
   // Multiple Choice - Liked Features
   final Set<String> _likedFeatures = {};
@@ -175,6 +186,7 @@ class _StudentSurveyState extends State<StudentSurvey> {
       _contentRating = 0;
       _selectedInstructorIds.clear();
       _instructorRatings.clear();
+      _focusedInstructorId = null;
       _likedFeatures.clear();
       _improvementController.clear();
       _recommendation = null;
@@ -597,6 +609,11 @@ class _StudentSurveyState extends State<StudentSurvey> {
                                   if (isSelected) {
                                     _selectedInstructorIds.remove(instId);
                                     _instructorRatings.remove(instId);
+                                    if (_focusedInstructorId == instId) {
+                                      _focusedInstructorId = _selectedInstructorIds.isNotEmpty
+                                          ? _selectedInstructorIds.first
+                                          : null;
+                                    }
                                   } else {
                                     _selectedInstructorIds.add(instId);
                                     _instructorRatings[instId] = {
@@ -606,6 +623,7 @@ class _StudentSurveyState extends State<StudentSurvey> {
                                       'answering': 0,
                                       'examples': 0,
                                     };
+                                    _focusedInstructorId ??= instId;
                                   }
                                 });
                               },
@@ -649,97 +667,258 @@ class _StudentSurveyState extends State<StudentSurvey> {
                           }).toList(),
                         ),
 
-                      // Teaching Experience Cards (One card per selected instructor)
+                      // Teaching Experience Card (Sequential Focus Tab — strictly one at a time)
                       if (_selectedInstructorIds.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        ..._selectedInstructorIds.map((instId) {
-                          final inst = _instructors.firstWhere(
-                            (i) => i['id'] == instId,
+                        () {
+                          final activeInstId = (_focusedInstructorId != null &&
+                                  _selectedInstructorIds.contains(_focusedInstructorId))
+                              ? _focusedInstructorId!
+                              : _selectedInstructorIds.first;
+                          final activeInst = _instructors.firstWhere(
+                            (i) => i['id'] == activeInstId,
                             orElse: () => {'name': 'المدرب'},
                           );
-                          final ratings = _instructorRatings[instId] ?? {};
+                          final ratings = _instructorRatings[activeInstId] ?? {};
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: _SurveyColors.bg,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: _SurveyColors.primaryBorder),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Text('👨‍🏫', style: TextStyle(fontSize: 20)),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'قيّم تجربة الشرح — ${inst['name']}',
-                                        style: GoogleFonts.ibmPlexSansArabic(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          color: _SurveyColors.text,
+                          final selectedList = _selectedInstructorIds.toList();
+                          final currentIndex = selectedList.indexOf(activeInstId);
+                          final nextInstId = (currentIndex >= 0 && currentIndex < selectedList.length - 1)
+                              ? selectedList[currentIndex + 1]
+                              : null;
+                          final nextInst = nextInstId != null
+                              ? _instructors.firstWhere(
+                                  (i) => i['id'] == nextInstId,
+                                  orElse: () => {'name': 'المدرب'},
+                                )
+                              : null;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Segmented Focus Tabs when multiple instructors are selected
+                              if (_selectedInstructorIds.length > 1) ...[
+                                const SizedBox(height: 18),
+                                Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: _SurveyColors.primarySurface,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: _SurveyColors.primaryBorder),
+                                  ),
+                                  child: Row(
+                                    children: _selectedInstructorIds.map((id) {
+                                      final isFocused = id == activeInstId;
+                                      final isDone = _isInstructorComplete(id);
+                                      final inst = _instructors.firstWhere(
+                                        (i) => i['id'] == id,
+                                        orElse: () => {'name': 'المدرب'},
+                                      );
+
+                                      return Expanded(
+                                        child: InkWell(
+                                          onTap: () {
+                                            HapticFeedback.selectionClick();
+                                            setState(() => _focusedInstructorId = id);
+                                          },
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 200),
+                                            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                                            decoration: BoxDecoration(
+                                              color: isFocused ? Colors.white : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(12),
+                                              boxShadow: isFocused
+                                                  ? [
+                                                      BoxShadow(
+                                                        color: _SurveyColors.primary.withValues(alpha: 0.12),
+                                                        blurRadius: 8,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                    ]
+                                                  : null,
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    inst['name'] ?? '',
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: GoogleFonts.ibmPlexSansArabic(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          isFocused ? FontWeight.w700 : FontWeight.w500,
+                                                      color: isFocused
+                                                          ? _SurveyColors.primary
+                                                          : _SurveyColors.textSecondary,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Icon(
+                                                  isDone
+                                                      ? Icons.check_circle_rounded
+                                                      : Icons.radio_button_unchecked_rounded,
+                                                  size: 16,
+                                                  color: isDone
+                                                      ? const Color(0xFF10B981)
+                                                      : _SurveyColors.textMuted,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-
-                                // Item 1: وضوح الشرح
-                                _buildMiniRatingRow(
-                                  title: 'وضوح الشرح',
-                                  value: ratings['clarity'] ?? 0,
-                                  onChanged: (v) => setState(() {
-                                    _instructorRatings[instId]!['clarity'] = v;
-                                  }),
-                                ),
-                                const Divider(height: 20, thickness: 0.8),
-
-                                // Item 2: تبسيط المعلومات
-                                _buildMiniRatingRow(
-                                  title: 'تبسيط المعلومات',
-                                  value: ratings['simplification'] ?? 0,
-                                  onChanged: (v) => setState(() {
-                                    _instructorRatings[instId]!['simplification'] = v;
-                                  }),
-                                ),
-                                const Divider(height: 20, thickness: 0.8),
-
-                                // Item 3: التفاعل مع الطلاب
-                                _buildMiniRatingRow(
-                                  title: 'التفاعل مع الطلاب',
-                                  value: ratings['interaction'] ?? 0,
-                                  onChanged: (v) => setState(() {
-                                    _instructorRatings[instId]!['interaction'] = v;
-                                  }),
-                                ),
-                                const Divider(height: 20, thickness: 0.8),
-
-                                // Item 4: الإجابة عن الأسئلة
-                                _buildMiniRatingRow(
-                                  title: 'الإجابة عن الأسئلة',
-                                  value: ratings['answering'] ?? 0,
-                                  onChanged: (v) => setState(() {
-                                    _instructorRatings[instId]!['answering'] = v;
-                                  }),
-                                ),
-                                const Divider(height: 20, thickness: 0.8),
-
-                                // Item 5: استخدام الأمثلة والتطبيقات
-                                _buildMiniRatingRow(
-                                  title: 'استخدام الأمثلة والتطبيقات',
-                                  value: ratings['examples'] ?? 0,
-                                  onChanged: (v) => setState(() {
-                                    _instructorRatings[instId]!['examples'] = v;
-                                  }),
+                                      );
+                                    }).toList(),
+                                  ),
                                 ),
                               ],
-                            ),
+
+                              const SizedBox(height: 16),
+
+                              // The Single Active Instructor Card
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 300),
+                                child: Container(
+                                  key: ValueKey(activeInstId),
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    color: _SurveyColors.bg,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(color: _SurveyColors.primaryBorder),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Text('👨‍🏫', style: TextStyle(fontSize: 20)),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'قيّم تجربة الشرح — ${activeInst['name']}',
+                                              style: GoogleFonts.ibmPlexSansArabic(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                color: _SurveyColors.text,
+                                              ),
+                                            ),
+                                          ),
+                                          if (_isInstructorComplete(activeInstId))
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.check_rounded,
+                                                      size: 14, color: Color(0xFF10B981)),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'مكتمل',
+                                                    style: GoogleFonts.ibmPlexSansArabic(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: const Color(0xFF10B981),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Item 1: وضوح الشرح
+                                      _buildMiniRatingRow(
+                                        title: 'وضوح الشرح',
+                                        value: ratings['clarity'] ?? 0,
+                                        onChanged: (v) => setState(() {
+                                          _instructorRatings[activeInstId]!['clarity'] = v;
+                                        }),
+                                      ),
+                                      const Divider(height: 20, thickness: 0.8),
+
+                                      // Item 2: تبسيط المعلومات
+                                      _buildMiniRatingRow(
+                                        title: 'تبسيط المعلومات',
+                                        value: ratings['simplification'] ?? 0,
+                                        onChanged: (v) => setState(() {
+                                          _instructorRatings[activeInstId]!['simplification'] = v;
+                                        }),
+                                      ),
+                                      const Divider(height: 20, thickness: 0.8),
+
+                                      // Item 3: التفاعل مع الطلاب
+                                      _buildMiniRatingRow(
+                                        title: 'التفاعل مع الطلاب',
+                                        value: ratings['interaction'] ?? 0,
+                                        onChanged: (v) => setState(() {
+                                          _instructorRatings[activeInstId]!['interaction'] = v;
+                                        }),
+                                      ),
+                                      const Divider(height: 20, thickness: 0.8),
+
+                                      // Item 4: الإجابة عن الأسئلة
+                                      _buildMiniRatingRow(
+                                        title: 'الإجابة عن الأسئلة',
+                                        value: ratings['answering'] ?? 0,
+                                        onChanged: (v) => setState(() {
+                                          _instructorRatings[activeInstId]!['answering'] = v;
+                                        }),
+                                      ),
+                                      const Divider(height: 20, thickness: 0.8),
+
+                                      // Item 5: استخدام الأمثلة والتطبيقات
+                                      _buildMiniRatingRow(
+                                        title: 'استخدام الأمثلة والتطبيقات',
+                                        value: ratings['examples'] ?? 0,
+                                        onChanged: (v) => setState(() {
+                                          _instructorRatings[activeInstId]!['examples'] = v;
+                                        }),
+                                      ),
+
+                                      // If next instructor exists, show seamless transition button
+                                      if (nextInst != null) ...[
+                                        const SizedBox(height: 18),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          height: 44,
+                                          child: OutlinedButton.icon(
+                                            onPressed: () {
+                                              HapticFeedback.selectionClick();
+                                              setState(() => _focusedInstructorId = nextInstId);
+                                            },
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: _SurveyColors.primary,
+                                              side: const BorderSide(
+                                                  color: _SurveyColors.primary, width: 1.5),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                                            label: Text(
+                                              'الانتقال لتقييم ${nextInst['name']}',
+                                              style: GoogleFonts.ibmPlexSansArabic(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           );
-                        }),
+                        }(),
                       ],
                     ],
                   ),
